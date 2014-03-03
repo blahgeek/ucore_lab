@@ -302,5 +302,19 @@ print_stackframe(void) {
       *           NOTICE: the calling funciton's return addr eip  = ss:[ebp+4]
       *                   the calling funciton's ebp = ss:[ebp]
       */
+    uint32_t ebp = read_ebp();
+    uint32_t eip = read_eip();
+    int stack_depth = 0, i = 0;
+    for( ; stack_depth < STACKFRAME_DEPTH ; stack_depth += 1){
+        cprintf("ebp: %x, eip: %x, args: ", ebp, eip);
+        uint32_t * p_ebp = (uint32_t *)(ebp);
+        for(i = 0 ; i < 4 ; i += 1)
+            cprintf("%x ", p_ebp[i+2]); // old ebp, return addr
+        cprintf("\n");
+        print_debuginfo(eip-1);
+        ebp = p_ebp[0];
+        eip = p_ebp[1];
+        // TODO
+    }
 }
 
