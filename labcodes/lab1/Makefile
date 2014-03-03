@@ -25,8 +25,8 @@ endif
 ifndef QEMU
 QEMU := $(shell if which qemu > /dev/null; \
 	then echo 'qemu'; exit; \
-	elif which i386-elf-qemu > /dev/null; \
-	then echo 'i386-elf-qemu'; exit; \
+	elif which qemu-system-i386 > /dev/null; \
+	then echo 'qemu-system-i386'; exit; \
 	else \
 	echo "***" 1>&2; \
 	echo "*** Error: Couldn't find a working QEMU executable." 1>&2; \
@@ -44,15 +44,27 @@ endif
 
 HOSTCC		:= gcc
 HOSTCFLAGS	:= -g -Wall -O2
+# -g: 包含调试信息
+# -Wall: 输出所有warning
+# -O2: 优化选项
 
 CC		:= $(GCCPREFIX)gcc
 CFLAGS	:= -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc $(DEFS)
+# -fno-builtin: 不接受不是__builtin_开头的内建函数
+# -Wall: 输出所有warning
+# -ggdb: 生成gdb使用的调试信息
+# -m32: 生成32位代码
+# -gstabs: 调试相关选项
+# -nostdinc: 不使用系统文件夹中的头文件，只用-I定义的文件夹
 CFLAGS	+= $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
+# -fno-stack-protector: 有些版本的编译器默认开启栈保护选项，将其关闭
 CTYPE	:= c S
 
 LD      := $(GCCPREFIX)ld
 LDFLAGS	:= -m $(shell $(LD) -V | grep elf_i386 2>/dev/null)
+# 32位
 LDFLAGS	+= -nostdlib
+# 类似上面的 -nostdinc
 
 OBJCOPY := $(GCCPREFIX)objcopy
 OBJDUMP := $(GCCPREFIX)objdump
@@ -135,8 +147,8 @@ $(kernel): tools/kernel.ld
 $(kernel): $(KOBJS)
 	@echo + ld $@
 	$(V)$(LD) $(LDFLAGS) -T tools/kernel.ld -o $@ $(KOBJS)
-	@$(OBJDUMP) -S $@ > $(call asmfile,kernel)
-	@$(OBJDUMP) -t $@ | $(SED) '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $(call symfile,kernel)
+	$(V)$(OBJDUMP) -S $@ > $(call asmfile,kernel)
+	$(V)$(OBJDUMP) -t $@ | $(SED) '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $(call symfile,kernel)
 
 $(call create_target,kernel)
 
@@ -151,9 +163,9 @@ bootblock = $(call totarget,bootblock)
 $(bootblock): $(call toobj,$(bootfiles)) | $(call totarget,sign)
 	@echo + ld $@
 	$(V)$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 $^ -o $(call toobj,bootblock)
-	@$(OBJDUMP) -S $(call objfile,bootblock) > $(call asmfile,bootblock)
-	@$(OBJCOPY) -S -O binary $(call objfile,bootblock) $(call outfile,bootblock)
-	@$(call totarget,sign) $(call outfile,bootblock) $(bootblock)
+	$(V)$(OBJDUMP) -S $(call objfile,bootblock) > $(call asmfile,bootblock)
+	$(V)$(OBJCOPY) -S -O binary $(call objfile,bootblock) $(call outfile,bootblock)
+	$(V)$(call totarget,sign) $(call outfile,bootblock) $(bootblock)
 
 $(call create_target,bootblock)
 
@@ -196,22 +208,24 @@ TARGETS: $(TARGETS)
 
 .DEFAULT_GOAL := TARGETS
 
-.PHONY: qemu qemu-nox debug debug-nox
+.PHONY: qemu qemu-nox debug-qemu debug-qemu-nox debug-gdb debug-qemu-kill
 qemu: $(UCOREIMG)
 	$(V)$(QEMU) -parallel stdio -hda $< -serial null
 
 qemu-nox: $(UCOREIMG)
 	$(V)$(QEMU) -serial mon:stdio -hda $< -nographic
-TERMINAL        :=gnome-terminal
-debug: $(UCOREIMG)
-	$(V)$(QEMU) -S -s -parallel stdio -hda $< -serial null &
-	$(V)sleep 2
-	$(V)$(TERMINAL) -e "gdb -q -tui -x tools/gdbinit"
+
+debug-qemu: $(UCOREIMG)
+	$(V)$(QEMU) -S -s -parallel stdio -hda $< -serial null
 	
-debug-nox: $(UCOREIMG)
-	$(V)$(QEMU) -S -s -serial mon:stdio -hda $< -nographic &
-	$(V)sleep 2
-	$(V)$(TERMINAL) -e "gdb -q -x tools/gdbinit"
+debug-qemu-nox: $(UCOREIMG)
+	$(V)$(QEMU) -parallel stdio -hda $< -serial null -S -s -nographic
+
+debug-gdb:
+	gdb -x tools/gdbinit
+
+debug-qemu-kill:
+	killall $(QEMU)
 
 .PHONY: grade touch
 
