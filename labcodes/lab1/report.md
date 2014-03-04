@@ -71,3 +71,47 @@ CFLAGS  += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 
 ## 加载ELF的过程
 
 从磁盘读取出第一个扇区的数据后，通过魔数判断其是否为ELF头，如果不是的话转向错误处理。然后根据ELF头部记录的代码段的偏移量，载入代码段，然后跳转到代码段起始地址。
+
+# 实现函数调用堆栈跟踪函数
+
+见`kern/debug/kdebug.c`源代码。输出结果：
+
+```
+ebp: 7b08, eip: 100a62, args: 10094 0 7b38 100092
+    kern/debug/kdebug.c:306: print_stackframe+21
+ebp: 7b18, eip: 100d50, args: 0 0 0 7b88
+    kern/debug/kmonitor.c:125: mon_backtrace+10
+ebp: 7b38, eip: 100092, args: 0 7b60 ffff0000 7b64
+    kern/init/init.c:48: grade_backtrace2+33
+ebp: 7b58, eip: 1000bb, args: 0 ffff0000 7b84 29
+    kern/init/init.c:53: grade_backtrace1+38
+ebp: 7b78, eip: 1000d9, args: 0 100000 ffff0000 1d
+    kern/init/init.c:58: grade_backtrace0+23
+ebp: 7b98, eip: 1000fe, args: 1032fc 1032e0 130a 0
+    kern/init/init.c:63: grade_backtrace+34
+ebp: 7bc8, eip: 100055, args: 0 0 0 10094
+    kern/init/init.c:28: kern_init+84
+ebp: 7bf8, eip: 7d68, args: c031fcfa c08ed88e 64e4d08e fa7502a8
+    <unknow>: -- 0x00007d67 --
+```
+
+其中最后一个`<unknow>`为调用`kern_init`的函数栈，为`bootmain.c`中的`bootmain`函数。
+
+# 中断初始化和处理
+
+中断门描述符大小为8个字节，其中高16位和最低16位组成入口地址的offset，第16至31位为入口地址的段号，这些位代表了中断处理的入口地址。
+
+初始化时，向每个中断描述符表中添加相应的中断处理程序的入口地址以及一些其他信息，最后使用`lidt`指令将中断描述符起始地址传给CPU。
+
+```
+for( ; i < 256 ; i += 1){
+    SETGATE(idt[i],
+            i == T_SYSCALL, //is trap ?
+            KERNEL_CS, // kernel code segment
+            __vectors[i],
+            (i == T_SYSCALL ? DPL_USER : DPL_KERNEL));
+}
+lidt(&idt_pd);
+```
+
+在`trap_dispatch`函数中添加对时钟中断的处理代码，编译后运行的效果即为每约1秒钟输出一个`100 ticks`。

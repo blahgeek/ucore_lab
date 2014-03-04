@@ -49,7 +49,11 @@ idt_init(void) {
     extern uintptr_t __vectors[];
     int i = 0 ;
     for( ; i < 256 ; i += 1){
-        SETGATE(idt[i], i == T_SYSCALL, KERNEL_CS, __vectors[i], (i == T_SYSCALL ? DPL_USER : DPL_KERNEL));//TODO
+        SETGATE(idt[i],
+                i == T_SYSCALL, //is trap ?
+                KERNEL_CS, // kernel code segment
+                __vectors[i],
+                (i == T_SYSCALL ? DPL_USER : DPL_KERNEL));
     }
     lidt(&idt_pd);
 }
