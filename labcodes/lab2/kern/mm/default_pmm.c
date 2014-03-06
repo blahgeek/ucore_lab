@@ -120,7 +120,7 @@ merge_to_next_page(list_entry_t * le){
     assert(p + p->property == p_next);
     p->property += (p_next->property);
     ClearPageProperty(p_next);
-    list_del(p_next);
+    list_del(le_next);
 }
 
 static void
@@ -131,15 +131,17 @@ merge_free_page(list_entry_t * le){
     struct Page * p = NULL;
     if(le_prev != (&free_list)){
         p = le2page(le_prev, page_link);
-        if(p + p->property == base)
+        if(p + p->property == base){
             merge_to_next_page(le_prev);
-        return merge_free_page(le_prev);
+            return merge_free_page(le_prev);
+        }
     }
     if(le_next != (&free_list)){
         p = le2page(le_next, page_link);
-        if(base + base->property == p)
+        if(base + base->property == p){
             merge_to_next_page(le);
-        return merge_free_page(le);
+            return merge_free_page(le);
+        }
     }
 }
 
